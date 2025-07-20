@@ -1,0 +1,70 @@
+{
+  "user": {
+    "did": "did:ethr:0x123456789",
+    "name": "Ali Khan",
+    "email": "ali.khan@example.com"
+  },
+  "credentials": [
+    {
+      "id": "nadra-national-id",
+      "type": "national-id",
+      "issuer": "NADRA",
+      "issuedDate": "2023-01-15",
+      "expires": "2030-01-15",
+      "verified": true,
+      "attributes": {
+        "name": "Ali Khan",
+        "idNumber": "123-456-789",
+        "dob": "1995-03-15",
+        "gender": "Male",
+        "nationality": "Pakistani"
+      }
+    },
+    {
+      "id": "nust-student",
+      "type": "diploma",
+      "issuer": "NUST",
+      "issuedDate": "2024-06-01",
+      "expires": "2026-06-30",
+      "verified": true,
+      "attributes": {
+        "name": "Ali Khan",
+        "degree": "BSc Computer Science",
+        "enrollmentDate": "2020-09-01",
+        "graduationDate": "2024-06-01",
+        "cgpa": "3.7"
+      }
+    },
+    {
+      "id": "isb-electric-bill",
+      "type": "proof-of-address",
+      "issuer": "Islamabad Electric",
+      "issuedDate": "2024-05-01",
+      "expires": "2024-06-01",
+      "verified": false,
+      "attributes": {
+        "name": "Ali Khan",
+        "address": "House 123, Street 45, G-11/3, Islamabad",
+        "accountNumber": "IE-789456",
+        "billMonth": "April 2024"
+      }
+    }
+  ],
+  "activityLog": [
+    {
+      "id": "act-1",
+      "date": "2024-05-12T14:30:00Z",
+      "type": "share",
+      "credentialId": "nadra-national-id",
+      "recipient": "Bank ABC",
+      "disclosedFields": ["name", "idNumber"]
+    },
+    {
+      "id": "act-2",
+      "date": "2024-05-10T09:15:00Z",
+      "type": "receive",
+      "credentialId": "nust-student",
+      "issuer": "NUST"
+    }
+  ]
+}
