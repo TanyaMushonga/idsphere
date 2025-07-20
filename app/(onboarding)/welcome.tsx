@@ -13,7 +13,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../../constants/theme/colors";
 import { GradientBackground } from "@/components/GradientBackground";
 import { AnimatedButton } from "@/components/AnimatedButton";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const ONBOARDING_KEY = "onboarding_complete";
 const { height } = Dimensions.get("window");
 
 export default function WelcomeScreen() {
@@ -45,7 +47,8 @@ export default function WelcomeScreen() {
     ]).start();
   }, []);
 
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     router.push("/(onboarding)/did-generate");
   };
 
@@ -142,7 +145,6 @@ export default function WelcomeScreen() {
           </View>
         </Animated.View>
 
-        {/* CTA Section */}
         <Animated.View style={[styles.ctaSection, { opacity: fadeAnim }]}>
           <AnimatedButton
             title="Get Started"

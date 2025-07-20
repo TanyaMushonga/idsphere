@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { theme } from "../../constants/theme/colors";
 import { GradientBackground } from "@/components/GradientBackground";
 import { AnimatedButton } from "@/components/AnimatedButton";
@@ -18,7 +19,7 @@ interface Permission {
   id: string;
   title: string;
   description: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   enabled: boolean;
   required?: boolean;
   benefits?: string[];
@@ -33,7 +34,7 @@ export default function PermissionsScreen() {
       id: "biometrics",
       title: "Biometric Authentication",
       description: "Use Face ID or fingerprint to secure your wallet",
-      icon: "👆",
+      icon: "finger-print",
       enabled: true,
       required: true,
       benefits: ["Enhanced security", "Quick access", "No passwords needed"],
@@ -42,7 +43,7 @@ export default function PermissionsScreen() {
       id: "notifications",
       title: "Push Notifications",
       description: "Get alerts for credential requests and activity",
-      icon: "🔔",
+      icon: "notifications",
       enabled: true,
       benefits: [
         "Real-time alerts",
@@ -54,7 +55,7 @@ export default function PermissionsScreen() {
       id: "backup",
       title: "Encrypted Backup",
       description: "Securely backup your identity to iCloud/Google Drive",
-      icon: "☁️",
+      icon: "cloud-upload",
       enabled: false,
       benefits: ["Device recovery", "Automatic sync", "Peace of mind"],
     },
@@ -62,7 +63,7 @@ export default function PermissionsScreen() {
       id: "analytics",
       title: "Anonymous Analytics",
       description: "Help improve IDSphere with anonymous usage data",
-      icon: "📊",
+      icon: "analytics",
       enabled: false,
       benefits: [
         "Better user experience",
@@ -96,19 +97,13 @@ export default function PermissionsScreen() {
   };
 
   const handleContinue = async () => {
-    // Store permissions
     const enabledPermissions = permissions
       .filter((p) => p.enabled)
       .map((p) => p.id);
 
     try {
-      // Here you would typically save to AsyncStorage or your preferred storage
-      // await AsyncStorage.setItem('userPermissions', JSON.stringify(enabledPermissions));
-
-      // Request actual system permissions for enabled items
       await requestSystemPermissions(enabledPermissions);
 
-      // Navigate to next screen (likely dashboard or main app)
       router.replace("/(main)/(tabs)/home");
     } catch (error) {
       Alert.alert(
@@ -120,12 +115,9 @@ export default function PermissionsScreen() {
   };
 
   const requestSystemPermissions = async (enabledPermissions: string[]) => {
-    // Request biometric permissions
     if (enabledPermissions.includes("biometrics")) {
-      // await LocalAuthentication.requestPermissionsAsync();
     }
 
-    // Request notification permissions
     if (enabledPermissions.includes("notifications")) {
       // await Notifications.requestPermissionsAsync();
     }
@@ -159,8 +151,25 @@ export default function PermissionsScreen() {
       ]}
     >
       <View style={styles.permissionHeader}>
-        <View style={styles.permissionIcon}>
-          <Text style={styles.iconText}>{permission.icon}</Text>
+        <View
+          style={[
+            styles.permissionIcon,
+            {
+              backgroundColor: permission.enabled
+                ? theme.colors.primary + "20"
+                : theme.colors.surfaceVariant,
+            },
+          ]}
+        >
+          <Ionicons
+            name={permission.icon}
+            size={24}
+            color={
+              permission.enabled
+                ? theme.colors.primary
+                : theme.colors.onSurfaceVariant
+            }
+          />
         </View>
         <View style={styles.permissionInfo}>
           <View style={styles.titleRow}>
@@ -195,11 +204,19 @@ export default function PermissionsScreen() {
       {permission.benefits && permission.enabled && (
         <View style={styles.benefitsContainer}>
           <Text style={styles.benefitsTitle}>Benefits:</Text>
-          {permission.benefits.map((benefit, index) => (
-            <Text key={index} style={styles.benefitItem}>
-              • {benefit}
-            </Text>
-          ))}
+          <View style={styles.benefitsList}>
+            {permission.benefits.map((benefit, index) => (
+              <View key={index} style={styles.benefitRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={theme.colors.primary}
+                  style={styles.benefitIcon}
+                />
+                <Text style={styles.benefitItem}>{benefit}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
     </Animated.View>
@@ -207,7 +224,11 @@ export default function PermissionsScreen() {
 
   return (
     <GradientBackground>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <Animated.View
           style={[
             styles.header,
@@ -262,29 +283,33 @@ export default function PermissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
   },
   header: {
-    paddingTop: theme.spacing.xxl + theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.xxl + theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
     alignItems: "center",
   },
   title: {
     ...theme.typography.h2,
     color: theme.colors.onBackground,
     textAlign: "center",
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   subtitle: {
     ...theme.typography.body,
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
     lineHeight: 24,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    maxWidth: 320,
   },
   permissionsContainer: {
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.xl,
+    gap: theme.spacing.lg,
+    marginBottom: theme.spacing.xxl,
   },
   permissionCard: {
     backgroundColor: theme.colors.surface,
@@ -295,11 +320,11 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 3,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
   permissionHeader: {
     flexDirection: "row",
@@ -307,50 +332,51 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   permissionIcon: {
-    width: theme.spacing.xxl,
-    height: theme.spacing.xxl,
+    width: theme.spacing.xxl + theme.spacing.sm,
+    height: theme.spacing.xxl + theme.spacing.sm,
     borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surfaceVariant,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: theme.colors.primary + "20",
-  },
-  iconText: {
-    fontSize: 24,
+    borderColor: theme.colors.primary + "30",
   },
   permissionInfo: {
     flex: 1,
+    paddingTop: 2,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
+    flexWrap: "wrap",
   },
   permissionTitle: {
     ...theme.typography.h4,
     color: theme.colors.onSurface,
+    lineHeight: 24,
   },
   requiredBadge: {
     backgroundColor: theme.colors.primary,
     paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: theme.borderRadius.sm,
   },
   requiredText: {
     fontSize: 12,
     color: theme.colors.onPrimary,
     fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   permissionDescription: {
     ...theme.typography.caption,
     color: theme.colors.onSurfaceVariant,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   benefitsContainer: {
-    marginTop: theme.spacing.md,
-    paddingTop: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surfaceVariant,
   },
@@ -359,14 +385,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: theme.colors.onSurface,
     marginBottom: theme.spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  benefitsList: {
+    gap: theme.spacing.sm,
+  },
+  benefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  benefitIcon: {
+    marginTop: 1,
   },
   benefitItem: {
-    fontSize: 13,
+    fontSize: 14,
     color: theme.colors.onSurfaceVariant,
-    lineHeight: 18,
-    marginBottom: theme.spacing.xs,
+    lineHeight: 20,
+    flex: 1,
   },
   footer: {
+    paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.xxl,
     alignItems: "center",
   },
@@ -374,19 +414,21 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
-    marginBottom: theme.spacing.lg,
-    lineHeight: 20,
+    marginBottom: theme.spacing.xl,
+    lineHeight: 22,
+    maxWidth: 280,
   },
   buttonContainer: {
     flexDirection: "row",
     gap: theme.spacing.md,
     width: "100%",
+    paddingHorizontal: theme.spacing.sm,
   },
   skipButton: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.md + 2,
     borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.surfaceVariant,
     alignItems: "center",
     justifyContent: "center",

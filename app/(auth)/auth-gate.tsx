@@ -6,6 +6,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { BiometricAuth } from "../../lib/auth";
 import { router } from "expo-router";
 import { theme } from "@/constants/theme/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const ONBOARDING_KEY = "onboarding_complete";
 
 export default function AuthGate() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -16,7 +19,7 @@ export default function AuthGate() {
 
   useEffect(() => {
     checkAuthCapabilities();
-    // Enhanced entrance animation
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -43,7 +46,19 @@ export default function AuthGate() {
       setLoading(false);
     }
   };
+  const checkOnboardingStatus = async () => {
+    try {
+      const hasOnboarded = await AsyncStorage.getItem(ONBOARDING_KEY);
 
+      if (hasOnboarded === "true") {
+        router.replace("/(main)/(tabs)/home");
+      } else {
+        router.replace("/(onboarding)");
+      }
+    } catch (error) {
+      console.error("Error checking onboarding status:", error);
+    }
+  };
   const handleBiometricAuth = async () => {
     setLoading(true);
     setAuthError("");
@@ -51,7 +66,7 @@ export default function AuthGate() {
     try {
       const success = await BiometricAuth.authenticate();
       if (success) {
-        router.replace("/(main)/(tabs)/home");
+        checkOnboardingStatus();
       } else {
         setAuthError("Authentication failed. Please try again.");
       }

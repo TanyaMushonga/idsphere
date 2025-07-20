@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -9,12 +9,13 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { theme } from "../../constants/theme/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Import your page components
 import WelcomeScreen from "./welcome";
 import DidGenerateScreen from "./did-generate";
 import PermissionsScreen from "./permissions";
 
+const ONBOARDING_KEY = "onboarding_complete";
 const { width: screenWidth } = Dimensions.get("window");
 
 export default function OnboardingLayout() {
@@ -41,7 +42,14 @@ export default function OnboardingLayout() {
     setCurrentPage(pageIndex);
   };
 
-  const handleSkip = () => {
+  useEffect(() => {
+    (async () => {
+      await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+    })();
+  }, []);
+
+  const handleSkip = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     router.replace("/(main)/(tabs)/home");
   };
 
@@ -67,12 +75,10 @@ export default function OnboardingLayout() {
 
   return (
     <View style={styles.container}>
-      {/* Skip Button */}
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
-      {/* Pages ScrollView */}
       <ScrollView
         ref={scrollViewRef}
         horizontal
@@ -92,7 +98,6 @@ export default function OnboardingLayout() {
         })}
       </ScrollView>
 
-      {/* Page Indicators */}
       {renderDots()}
     </View>
   );
