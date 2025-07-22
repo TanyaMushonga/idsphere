@@ -1,1560 +1,821 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  StyleSheet,
-  RefreshControl,
-  Animated,
-  StatusBar,
-  Dimensions,
-  Platform,
   Modal,
-  TextInput,
+  FlatList,
   Alert,
-  Switch,
+  Dimensions,
   SafeAreaView,
-  KeyboardAvoidingView,
+  StatusBar,
+  ActivityIndicator,
 } from "react-native";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import * as Clipboard from "expo-clipboard";
 import { theme } from "@/constants/theme/colors";
+import data from "./data.json";
+import { styles } from "@/constants/styles/home";
 
-const { width, height } = Dimensions.get("window");
+interface Credential {
+  id: string;
+  type: string;
+  issuer: string;
+  issueDate: string;
+  expiryDate: string;
+  status: "Valid" | "Revoked" | "Pending";
+  attributes: Array<{
+    name: string;
+    value: string;
+    required: boolean;
+  }>;
+}
 
-const dummyCredentials = [
-  {
-    id: "1",
-    type: "National ID",
-    issuer: "NADRA",
-    issuerLogo: "🏛️",
-    status: "Verified",
-    statusColor: theme.colors.success,
-    borderColor: theme.colors.success,
-    expires: "Jan 15, 2030",
-    lastVerified: null,
-    details: {
-      fullName: "John Doe",
-      idNumber: "12345-6789012-3",
-      dateOfBirth: "15/01/1990",
-      address: "123 Main Street, Islamabad",
-      issueDate: "15/01/2020",
-    },
-  },
-  {
-    id: "2",
-    type: "University Credential",
-    issuer: "NUST University",
-    issuerLogo: "🎓",
-    status: "NUST Student - Enrolled",
-    statusColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-    program: "Computer Science",
-    lastVerified: null,
-    details: {
-      studentName: "John Doe",
-      studentId: "2020-CS-123",
-      program: "Bachelor of Computer Science",
-      enrollmentYear: "2020",
-      currentSemester: "8th",
-      cgpa: "3.85",
-    },
-  },
-  {
-    id: "3",
-    type: "Utility Bill",
-    issuer: "IESCO",
-    issuerLogo: "⚡",
-    status: "Proof of Address - Islamabad",
-    statusColor: theme.colors.warning,
-    borderColor: theme.colors.warning,
-    lastVerified: "May 3, 2023",
-    details: {
-      accountHolder: "John Doe",
-      accountNumber: "123456789",
-      address: "123 Main Street, Islamabad",
-      billMonth: "December 2024",
-      amount: "PKR 5,250",
-    },
-  },
-];
+interface Activity {
+  id: string;
+  type: string;
+  target: string;
+  timestamp: string;
+  details: any;
+}
 
-const dummyActivity = [
-  {
-    id: "1",
-    action: "Shared University Credential",
-    time: "Today, 10:23 AM",
-    icon: "share",
-    color: theme.colors.primary,
-  },
-  {
-    id: "2",
-    action: "National ID Verified",
-    time: "Yesterday, 3:45 PM",
-    icon: "shield-checkmark",
-    color: theme.colors.success,
-  },
-];
+interface UserData {
+  did: string;
+  credentials: Credential[];
+  recentActivity: Activity[];
+}
 
-const institutionTypes = [
-  {
-    id: "gov",
-    name: "Government Agencies",
-    icon: "🏛️",
-    description: "NADRA, Passport Office, Tax Authorities",
-    requiredDocs: ["National ID", "Birth Certificate", "Proof of Address"],
-  },
-  {
-    id: "edu",
-    name: "Educational Institutions",
-    icon: "🎓",
-    description: "Universities, Colleges, Schools",
-    requiredDocs: ["Academic Transcripts", "Certificates", "Student ID"],
-  },
-  {
-    id: "bank",
-    name: "Financial Institutions",
-    icon: "🏦",
-    description: "Banks, Insurance Companies",
-    requiredDocs: ["Bank Statements", "Salary Certificate", "Tax Returns"],
-  },
-  {
-    id: "health",
-    name: "Healthcare Providers",
-    icon: "🏥",
-    description: "Hospitals, Clinics, Health Insurance",
-    requiredDocs: [
-      "Medical Records",
-      "Insurance Card",
-      "Vaccination Certificate",
-    ],
-  },
-];
+const userData: UserData = data as UserData;
 
-export default function HomeScreen() {
-  const [loading, setLoading] = useState(false);
-  const [presentationModal, setPresentationModal] = useState(false);
-  const [addCredentialModal, setAddCredentialModal] = useState(false);
-  const [verificationModal, setVerificationModal] = useState(false);
-  const [shareModal, setShareModal] = useState(false);
-  const [selectedCredential, setSelectedCredential] = useState(null);
-  const [selectedInstitution, setSelectedInstitution] = useState(null);
-  const [fabExpanded, setFabExpanded] = useState(false);
+const { width } = Dimensions.get("window");
 
-  // Form states
-  const [newCredential, setNewCredential] = useState({
-    type: "",
-    issuer: "",
-    details: "",
-  });
+const HomeScreen: React.FC = () => {
+  const [credentialModalVisible, setCredentialModalVisible] = useState(false);
+  const [activityModalVisible, setActivityModalVisible] = useState(false);
+  const [qrScannerModalVisible, setQrScannerModalVisible] = useState(false);
+  const [receiveModalVisible, setReceiveModalVisible] = useState(false);
+  const [backupModalVisible, setBackupModalVisible] = useState(false);
 
-  const [verificationRequest, setVerificationRequest] = useState({
-    institutionType: "",
-    message: "",
-    documents: [],
-  });
+  const [selectedCredential, setSelectedCredential] =
+    useState<Credential | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+    null
+  );
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
 
-  // Sharing toggles
-  const [shareToggles, setShareToggles] = useState({});
+  // Mock states
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string>("");
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [receivingProgress, setReceivingProgress] = useState(0);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const fabAnim = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const toggleFab = () => {
-    setFabExpanded(!fabExpanded);
-    Animated.timing(fabAnim, {
-      toValue: fabExpanded ? 0 : 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const refresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1000);
-  };
-
-  const openPresentationModal = (credential) => {
-    setSelectedCredential(credential);
-    // Initialize share toggles
-    const toggles = {};
-    Object.keys(credential.details).forEach((key) => {
-      toggles[key] = true;
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     });
-    setShareToggles(toggles);
-    setPresentationModal(true);
   };
 
-  const openShareModal = () => {
-    setShareModal(true);
-    setFabExpanded(false);
-    Animated.timing(fabAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+  const getTimeAgo = (timestamp: string): string => {
+    const now = new Date();
+    const activityTime = new Date(timestamp);
+    const diffInHours = Math.floor(
+      (now.getTime() - activityTime.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    return `${Math.floor(diffInHours / 24)}d ago`;
   };
 
-  const openScanModal = () => {
-    router.push("/credential/scan");
-    setFabExpanded(false);
-    Animated.timing(fabAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+  const getCredentialIcon = (type: string): keyof typeof Ionicons.glyphMap => {
+    switch (type) {
+      case "Bank Account Verification":
+        return "card";
+      case "COVID-19 Vaccination Certificate":
+        return "medical";
+      case "Residential Permit":
+        return "home";
+      case "Driver's License":
+        return "car";
+      case "University Degree Certificate":
+        return "school";
+      default:
+        return "document-text";
+    }
   };
 
-  const handleAddCredential = () => {
-    if (!newCredential.type || !newCredential.issuer) {
-      Alert.alert("Error", "Please fill in all required fields");
+  const getActivityIcon = (type: string): keyof typeof Ionicons.glyphMap => {
+    switch (type) {
+      case "Credential Shared":
+        return "share";
+      case "Verification Request":
+        return "checkmark-circle";
+      case "New Credential Received":
+        return "add-circle";
+      case "Backup Reminder":
+        return "cloud-upload";
+      case "Credential Revoked":
+        return "close-circle";
+      default:
+        return "information-circle";
+    }
+  };
+
+  const openCredentialModal = (credential: Credential) => {
+    setSelectedCredential(credential);
+    const requiredAttrs = credential.attributes
+      .filter((attr) => attr.required)
+      .map((attr) => attr.name);
+    setSelectedAttributes(requiredAttrs);
+    setCredentialModalVisible(true);
+  };
+
+  const openActivityModal = (activity: Activity) => {
+    setSelectedActivity(activity);
+    setActivityModalVisible(true);
+  };
+
+  const toggleAttribute = (attributeName: string) => {
+    const attribute = selectedCredential?.attributes.find(
+      (attr) => attr.name === attributeName
+    );
+    if (attribute?.required && selectedAttributes.includes(attributeName)) {
       return;
     }
 
-    Alert.alert("Success", "Credential added successfully!");
-    setAddCredentialModal(false);
-    setNewCredential({ type: "", issuer: "", details: "" });
-  };
-
-  const handleVerificationRequest = () => {
-    if (!verificationRequest.institutionType || !verificationRequest.message) {
-      Alert.alert("Error", "Please fill in all required fields");
-      return;
-    }
-
-    Alert.alert("Success", "Verification request submitted successfully!");
-    setVerificationModal(false);
-    setSelectedInstitution(null);
-    setVerificationRequest({ institutionType: "", message: "", documents: [] });
+    setSelectedAttributes((prev) =>
+      prev.includes(attributeName)
+        ? prev.filter((name) => name !== attributeName)
+        : [...prev, attributeName]
+    );
   };
 
   const shareCredential = () => {
-    const sharedData = {};
-    Object.keys(shareToggles).forEach((key) => {
-      if (shareToggles[key]) {
-        sharedData[key] = selectedCredential.details[key];
-      }
+    const selectedData = selectedCredential?.attributes
+      .filter((attr) => selectedAttributes.includes(attr.name))
+      .map((attr) => ({ [attr.name]: attr.value }));
+
+    console.log("Sharing Credential:", {
+      credentialType: selectedCredential?.type,
+      selectedAttributes: selectedData,
     });
 
     Alert.alert(
-      "Shared Successfully",
-      `Credential shared with selected information`
+      "Credential Shared",
+      `Successfully shared ${selectedAttributes.length} attributes`
     );
-    setShareModal(false);
+    setCredentialModalVisible(false);
   };
 
-  const CredentialCard = ({
-    credential,
-    index,
-  }: {
-    credential: any;
-    index: number;
-  }) => (
-    <Animated.View
-      style={[
-        styles.credentialCard,
-        { borderColor: credential.borderColor },
-        {
-          opacity: fadeAnim,
-          transform: [
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 30],
-                outputRange: [0, 30 + index * 10],
-              }),
-            },
-          ],
-        },
-      ]}
+  // Mock QR Scanner
+  const scanQR = () => {
+    setQrScannerModalVisible(true);
+    setIsScanning(true);
+    setScanResult("");
+
+    // Simulate scanning delay
+    setTimeout(() => {
+      setIsScanning(false);
+      const mockResults = [
+        "did:example:123456789abcdefghi",
+        "vc://request/bank-verification",
+        "https://issuer.example.com/credential/abc123",
+        "Invalid QR Code",
+        "vc://share/university-degree",
+      ];
+      const randomResult =
+        mockResults[Math.floor(Math.random() * mockResults.length)];
+      setScanResult(randomResult);
+    }, 2000);
+  };
+
+  const processScanResult = () => {
+    if (scanResult.startsWith("did:")) {
+      Alert.alert(
+        "DID Detected",
+        `Found DID: ${scanResult.substring(0, 30)}...`
+      );
+    } else if (scanResult.startsWith("vc://request")) {
+      Alert.alert(
+        "Verification Request",
+        "A verifier is requesting your credentials"
+      );
+    } else if (scanResult.startsWith("vc://share")) {
+      Alert.alert(
+        "Credential Offer",
+        "Someone wants to share a credential with you"
+      );
+    } else if (scanResult.startsWith("https://")) {
+      Alert.alert("Credential Link", "Found a credential issuance link");
+    } else {
+      Alert.alert("Scan Error", "Unable to process this QR code");
+    }
+    setQrScannerModalVisible(false);
+  };
+
+  // Mock Share DID
+  const shareMyDID = async () => {
+    await Clipboard.setStringAsync(userData.did);
+
+    // Show share options
+    Alert.alert(
+      "Share Your DID",
+      "Your DID has been copied to clipboard. How would you like to share it?",
+      [
+        { text: "QR Code", onPress: () => showQRCode() },
+        { text: "Text Message", onPress: () => shareViaText() },
+        { text: "Email", onPress: () => shareViaEmail() },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
+  const showQRCode = () => {
+    Alert.alert("QR Code", "QR code displayed for your DID");
+  };
+
+  const shareViaText = () => {
+    Alert.alert("Share via SMS", "Opening SMS app with your DID");
+  };
+
+  const shareViaEmail = () => {
+    Alert.alert("Share via Email", "Opening email app with your DID");
+  };
+
+  // Mock Receive Credential
+  const receiveCredential = () => {
+    setReceiveModalVisible(true);
+    setIsReceiving(true);
+    setReceivingProgress(0);
+
+    // Simulate receiving progress
+    const interval = setInterval(() => {
+      setReceivingProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsReceiving(false);
+          setTimeout(() => {
+            Alert.alert(
+              "Credential Received!",
+              "New Professional Certificate from TechCorp has been added to your wallet",
+              [{ text: "OK", onPress: () => setReceiveModalVisible(false) }]
+            );
+          }, 500);
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
+  };
+
+  // Mock Backup DID
+  const backupDID = () => {
+    setBackupModalVisible(true);
+    setIsBackingUp(true);
+    setBackupProgress(0);
+
+    // Simulate backup progress
+    const interval = setInterval(() => {
+      setBackupProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsBackingUp(false);
+          setTimeout(() => {
+            Alert.alert(
+              "Backup Complete",
+              "Your DID and credentials have been securely backed up to encrypted cloud storage",
+              [{ text: "OK", onPress: () => setBackupModalVisible(false) }]
+            );
+          }, 500);
+          return 100;
+        }
+        return prev + 5;
+      });
+    }, 150);
+  };
+
+  // Render Functions
+  const renderCredentialCard = ({ item }: { item: Credential }) => (
+    <TouchableOpacity
+      style={styles.credentialCard}
+      onPress={() => openCredentialModal(item)}
     >
-      <TouchableOpacity
-        onPress={() => openPresentationModal(credential)}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={[theme.colors.surface, theme.colors.surfaceVariant + "50"]}
-          style={styles.cardGradient}
+      <View style={styles.credentialHeader}>
+        <Ionicons
+          name={getCredentialIcon(item.type)}
+          size={24}
+          color={theme.colors.primaryLight}
+        />
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor:
+                item.status === "Valid"
+                  ? theme.colors.success
+                  : theme.colors.error,
+            },
+          ]}
         >
-          <View style={styles.cardContent}>
-            {/* Header */}
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleRow}>
-                <View style={styles.credentialIcon}>
-                  <Text style={styles.iconEmoji}>{credential.issuerLogo}</Text>
-                </View>
-                <View style={styles.titleContainer}>
-                  <Text style={styles.credentialType}>{credential.type}</Text>
-                  <View style={styles.statusRow}>
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={14}
-                      color={credential.statusColor}
-                    />
-                    <Text
-                      style={[
-                        styles.credentialStatus,
-                        { color: credential.statusColor },
-                      ]}
-                    >
-                      {credential.status}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.moreButton}
-                onPress={() => openPresentationModal(credential)}
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={theme.colors.onSurfaceVariant}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Body */}
-            <View style={styles.cardBody}>
-              <View style={styles.issuerRow}>
-                <Text style={styles.issuerLabel}>Issued by</Text>
-                {credential.program && (
-                  <Text style={styles.programLabel}>Program</Text>
-                )}
-              </View>
-              <View style={styles.issuerValueRow}>
-                <View style={styles.issuerContainer}>
-                  <Text style={styles.issuerName}>{credential.issuer}</Text>
-                  <Text style={styles.issuerEmoji}>
-                    {credential.issuerLogo}
-                  </Text>
-                </View>
-                {credential.program && (
-                  <Text style={styles.programValue}>{credential.program}</Text>
-                )}
-              </View>
-            </View>
-
-            {/* Footer */}
-            {(credential.expires || credential.lastVerified) && (
-              <View style={styles.cardFooter}>
-                {credential.expires && (
-                  <Text style={styles.footerText}>
-                    Expires: {credential.expires}
-                  </Text>
-                )}
-                {credential.lastVerified && (
-                  <Text style={styles.footerText}>
-                    Last verified: {credential.lastVerified}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
+          <Text style={styles.statusText}>{item.status}</Text>
+        </View>
+      </View>
+      <Text style={styles.credentialTitle}>{item.type}</Text>
+      <Text style={styles.credentialIssuer}>{item.issuer}</Text>
+      <Text style={styles.credentialDate}>
+        Expires: {formatDate(item.expiryDate)}
+      </Text>
+    </TouchableOpacity>
   );
 
-  const ActivityItem = ({
-    activity,
-    index,
-  }: {
-    activity: any;
-    index: number;
-  }) => (
-    <Animated.View
-      style={[
-        styles.activityItem,
-        {
-          opacity: fadeAnim,
-          transform: [
-            {
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 30],
-                outputRange: [0, 20 + index * 5],
-              }),
-            },
-          ],
-        },
-      ]}
+  const renderActivityItem = ({ item }: { item: Activity }) => (
+    <TouchableOpacity
+      style={styles.activityItem}
+      onPress={() => openActivityModal(item)}
     >
-      <TouchableOpacity activeOpacity={0.7}>
-        <LinearGradient
-          colors={[theme.colors.surface, theme.colors.surfaceVariant + "30"]}
-          style={styles.activityGradient}
-        >
-          <View style={styles.activityContent}>
-            <View
-              style={[
-                styles.activityIcon,
-                { backgroundColor: activity.color + "20" },
-              ]}
-            >
-              <Ionicons name={activity.icon} size={16} color={activity.color} />
-            </View>
-            <View style={styles.activityText}>
-              <Text style={styles.activityAction}>{activity.action}</Text>
-              <Text style={styles.activityTime}>{activity.time}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-
-  const FloatingActionButtons = () => (
-    <View style={styles.fabContainer}>
-      {/* Secondary FABs */}
-      <Animated.View
-        style={[
-          styles.secondaryFab,
-          {
-            transform: [
-              {
-                translateY: fabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -120],
-                }),
-              },
-              {
-                scale: fabAnim,
-              },
-            ],
-            opacity: fabAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.fab, styles.secondaryFabButton]}
-          onPress={() => setVerificationModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="shield-checkmark"
-            size={24}
-            color={theme.colors.onPrimary}
-          />
-        </TouchableOpacity>
-        <Text style={styles.fabLabel}>Verify</Text>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.secondaryFab,
-          {
-            transform: [
-              {
-                translateY: fabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -80],
-                }),
-              },
-              {
-                scale: fabAnim,
-              },
-            ],
-            opacity: fabAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.fab, styles.secondaryFabButton]}
-          onPress={() => setAddCredentialModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={24} color={theme.colors.onPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.fabLabel}>Add</Text>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.secondaryFab,
-          {
-            transform: [
-              {
-                translateY: fabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -160],
-                }),
-              },
-              {
-                scale: fabAnim,
-              },
-            ],
-            opacity: fabAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.fab, styles.secondaryFabButton]}
-          onPress={openShareModal}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="share" size={24} color={theme.colors.onPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.fabLabel}>Share</Text>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.secondaryFab,
-          {
-            transform: [
-              {
-                translateY: fabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -200],
-                }),
-              },
-              {
-                scale: fabAnim,
-              },
-            ],
-            opacity: fabAnim,
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.fab, styles.secondaryFabButton]}
-          onPress={openScanModal}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="scan" size={24} color={theme.colors.onPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.fabLabel}>Scan</Text>
-      </Animated.View>
-
-      {/* Main FAB */}
-      <TouchableOpacity
-        style={[styles.fab, styles.mainFab]}
-        onPress={toggleFab}
-        activeOpacity={0.8}
-      >
-        <Animated.View
-          style={{
-            transform: [
-              {
-                rotate: fabAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0deg", "45deg"],
-                }),
-              },
-            ],
-          }}
-        >
-          <Ionicons name="add" size={28} color={theme.colors.onPrimary} />
-        </Animated.View>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.activityIcon}>
+        <Ionicons
+          name={getActivityIcon(item.type)}
+          size={20}
+          color={theme.colors.primaryLight}
+        />
+      </View>
+      <View style={styles.activityContent}>
+        <Text style={styles.activityType}>{item.type}</Text>
+        <Text style={styles.activityTarget}>{item.target}</Text>
+        <Text style={styles.activityTime}>{getTimeAgo(item.timestamp)}</Text>
+      </View>
+      <Ionicons
+        name="chevron-forward"
+        size={16}
+        color={theme.colors.onSurfaceVariant}
+      />
+    </TouchableOpacity>
   );
 
   return (
-    <LinearGradient
-      colors={[theme.colors.background, theme.colors.surface + "30"]}
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={theme.colors.background}
       />
 
-      {/* Header */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[theme.colors.primary, theme.colors.primaryDark]}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>My Identity</Text>
-            <TouchableOpacity style={styles.profileButton}>
-              <Ionicons
-                name="person"
-                size={24}
-                color={theme.colors.onPrimary}
-              />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </Animated.View>
-
-      {/* Scrollable Content */}
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refresh}
-            tintColor={theme.colors.primary}
-          />
-        }
-        contentContainerStyle={styles.scrollContent}
       >
-        {/* Credentials Section */}
-        <View style={styles.credentialsSection}>
-          {dummyCredentials.map((credential, index) => (
-            <CredentialCard
-              key={credential.id}
-              credential={credential}
-              index={index}
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Welcome back, Tanya</Text>
+          <View style={styles.didContainer}>
+            <Text style={styles.didLabel}>Your DID:</Text>
+            <Text style={styles.didValue}>{userData.did}</Text>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionButton} onPress={scanQR}>
+            <Ionicons name="qr-code" size={24} color={theme.colors.onPrimary} />
+            <Text style={styles.quickActionText}>Scan QR</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={shareMyDID}
+          >
+            <Ionicons
+              name="share-outline"
+              size={24}
+              color={theme.colors.onPrimary}
             />
-          ))}
+            <Text style={styles.quickActionText}>Share DID</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={receiveCredential}
+          >
+            <Ionicons
+              name="download-outline"
+              size={24}
+              color={theme.colors.onPrimary}
+            />
+            <Text style={styles.quickActionText}>Receive</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={backupDID}
+          >
+            <Ionicons
+              name="cloud-upload-outline"
+              size={24}
+              color={theme.colors.onPrimary}
+            />
+            <Text style={styles.quickActionText}>Backup</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Credentials Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>My Credentials</Text>
+          <FlatList
+            data={userData.credentials}
+            renderItem={renderCredentialCard}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.credentialsList}
+          />
         </View>
 
         {/* Recent Activity Section */}
-        <Animated.View
-          style={[
-            styles.activitySection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {dummyActivity.map((activity, index) => (
-            <ActivityItem key={activity.id} activity={activity} index={index} />
+          {userData.recentActivity.slice(0, 6).map((item) => (
+            <View key={item.id}>{renderActivityItem({ item })}</View>
           ))}
-        </Animated.View>
+        </View>
       </ScrollView>
 
-      {/* Floating Action Buttons */}
-      <FloatingActionButtons />
-
-      {/* Credential Presentation Modal */}
+      {/* QR Scanner Modal */}
       <Modal
-        visible={presentationModal}
+        visible={qrScannerModalVisible}
         animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setPresentationModal(false)}
+        presentationStyle="fullScreen"
+        onRequestClose={() => setQrScannerModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <LinearGradient
-            colors={[theme.colors.background, theme.colors.surface]}
-            style={styles.modalGradient}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Credential Details</Text>
-              <TouchableOpacity
-                onPress={() => setPresentationModal(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={theme.colors.onSurface}
-                />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.qrScannerContainer}>
+          <View style={styles.qrScannerHeader}>
+            <TouchableOpacity onPress={() => setQrScannerModalVisible(false)}>
+              <Ionicons name="close" size={28} color={theme.colors.onPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.qrScannerTitle}>Scan QR Code</Text>
+            <View style={{ width: 28 }} />
+          </View>
 
-            {selectedCredential && (
-              <ScrollView style={styles.modalContent}>
-                <View style={styles.credentialDetail}>
-                  <View style={styles.detailHeader}>
-                    <Text style={styles.detailIcon}>
-                      {selectedCredential.issuerLogo}
-                    </Text>
-                    <View>
-                      <Text style={styles.detailTitle}>
-                        {selectedCredential.type}
-                      </Text>
-                      <Text style={styles.detailIssuer}>
-                        Issued by {selectedCredential.issuer}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailsGrid}>
-                    {Object.entries(selectedCredential.details).map(
-                      ([key, value]) => (
-                        <View key={key} style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>
-                            {key
-                              .replace(/([A-Z])/g, " $1")
-                              .replace(/^./, (str) => str.toUpperCase())}
-                          </Text>
-                          <Text style={styles.detailValue}>{value}</Text>
-                        </View>
-                      )
-                    )}
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.shareButton}
-                      onPress={() => {
-                        setPresentationModal(false);
-                        setTimeout(() => setShareModal(true), 300);
-                      }}
-                    >
-                      <LinearGradient
-                        colors={[
-                          theme.colors.primary,
-                          theme.colors.primaryDark,
-                        ]}
-                        style={styles.actionButtonGradient}
-                      >
-                        <Ionicons
-                          name="share"
-                          size={20}
-                          color={theme.colors.onPrimary}
-                        />
-                        <Text style={styles.actionButtonText}>Share</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.verifyButton}>
-                      <LinearGradient
-                        colors={[
-                          theme.colors.success + "20",
-                          theme.colors.success + "10",
-                        ]}
-                        style={styles.actionButtonGradient}
-                      >
-                        <Ionicons
-                          name="shield-checkmark"
-                          size={20}
-                          color={theme.colors.success}
-                        />
-                        <Text
-                          style={[
-                            styles.actionButtonText,
-                            { color: theme.colors.success },
-                          ]}
-                        >
-                          Re-verify
-                        </Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
+          <View style={styles.qrScannerContent}>
+            {isScanning ? (
+              <View style={styles.scanningContainer}>
+                <View style={styles.scanningFrame}>
+                  <ActivityIndicator
+                    size="large"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.scanningText}>Scanning...</Text>
                 </View>
-              </ScrollView>
-            )}
-          </LinearGradient>
-        </SafeAreaView>
+                <Text style={styles.scanningInstruction}>
+                  Point your camera at a QR code
+                </Text>
+              </View>
+            ) : scanResult ? (
+              <View style={styles.scanResultContainer}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={64}
+                  color={theme.colors.success}
+                />
+                <Text style={styles.scanResultTitle}>QR Code Detected</Text>
+                <Text style={styles.scanResultText}>{scanResult}</Text>
+                <TouchableOpacity
+                  style={styles.processScanButton}
+                  onPress={processScanResult}
+                >
+                  <Text style={styles.processScanButtonText}>
+                    Process Result
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.scanAgainButton}
+                  onPress={scanQR}
+                >
+                  <Text style={styles.scanAgainButtonText}>Scan Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        </View>
       </Modal>
 
-      {/* Share Modal */}
+      {/* Receive Credential Modal */}
       <Modal
-        visible={shareModal}
+        visible={receiveModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShareModal(false)}
+        onRequestClose={() => setReceiveModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <LinearGradient
-            colors={[theme.colors.background, theme.colors.surface]}
-            style={styles.modalGradient}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Share Credential</Text>
-              <TouchableOpacity
-                onPress={() => setShareModal(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={theme.colors.onSurface}
-                />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setReceiveModalVisible(false)}>
+              <Ionicons name="close" size={24} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Receive Credential</Text>
+            <View style={{ width: 24 }} />
+          </View>
 
-            {selectedCredential && (
-              <ScrollView style={styles.modalContent}>
-                <Text style={styles.shareDescription}>
-                  Select which information you want to share from your{" "}
+          <View style={styles.modalContent}>
+            {isReceiving ? (
+              <View style={styles.progressContainer}>
+                <Ionicons
+                  name="download"
+                  size={64}
+                  color={theme.colors.primary}
+                />
+                <Text style={styles.progressTitle}>Receiving Credential</Text>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${receivingProgress}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressText}>{receivingProgress}%</Text>
+                <Text style={styles.progressDescription}>
+                  Verifying credential authenticity...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.receiveContent}>
+                <Ionicons
+                  name="qr-code-outline"
+                  size={100}
+                  color={theme.colors.primary}
+                />
+                <Text style={styles.receiveTitle}>Ready to Receive</Text>
+                <Text style={styles.receiveDescription}>
+                  Present this screen to the credential issuer or scan their QR
+                  code
+                </Text>
+                <TouchableOpacity
+                  style={styles.receiveButton}
+                  onPress={receiveCredential}
+                >
+                  <Text style={styles.receiveButtonText}>Start Receiving</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Backup Modal */}
+      <Modal
+        visible={backupModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setBackupModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setBackupModalVisible(false)}>
+              <Ionicons name="close" size={24} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Backup DID</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <View style={styles.modalContent}>
+            {isBackingUp ? (
+              <View style={styles.progressContainer}>
+                <Ionicons
+                  name="cloud-upload"
+                  size={64}
+                  color={theme.colors.primary}
+                />
+                <Text style={styles.progressTitle}>Backing Up</Text>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${backupProgress}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressText}>{backupProgress}%</Text>
+                <Text style={styles.progressDescription}>
+                  Encrypting and uploading your DID securely...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.backupContent}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={100}
+                  color={theme.colors.success}
+                />
+                <Text style={styles.backupTitle}>Secure Backup</Text>
+                <Text style={styles.backupDescription}>
+                  Your DID and credentials will be encrypted and backed up to
+                  secure cloud storage. This ensures you can recover your
+                  identity even if you lose this device.
+                </Text>
+                <View style={styles.backupFeatures}>
+                  <View style={styles.backupFeature}>
+                    <Ionicons
+                      name="lock-closed"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={styles.backupFeatureText}>
+                      End-to-end encrypted
+                    </Text>
+                  </View>
+                  <View style={styles.backupFeature}>
+                    <Ionicons
+                      name="cloud"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={styles.backupFeatureText}>
+                      Secure cloud storage
+                    </Text>
+                  </View>
+                  <View style={styles.backupFeature}>
+                    <Ionicons
+                      name="sync"
+                      size={20}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={styles.backupFeatureText}>
+                      Auto-sync enabled
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.backupButton}
+                  onPress={backupDID}
+                >
+                  <Text style={styles.backupButtonText}>Start Backup</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Credential Modal */}
+      <Modal
+        visible={credentialModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setCredentialModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setCredentialModalVisible(false)}>
+              <Ionicons name="close" size={24} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Share Credential</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {selectedCredential && (
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.credentialInfo}>
+                <Text style={styles.modalCredentialTitle}>
                   {selectedCredential.type}
                 </Text>
+                <Text style={styles.modalCredentialIssuer}>
+                  {selectedCredential.issuer}
+                </Text>
+              </View>
 
-                <View style={styles.shareToggles}>
-                  {Object.entries(selectedCredential.details).map(
+              <Text style={styles.attributesTitle}>
+                Select attributes to share:
+              </Text>
+
+              {selectedCredential.attributes.map((attribute) => (
+                <TouchableOpacity
+                  key={attribute.name}
+                  style={[
+                    styles.attributeItem,
+                    selectedAttributes.includes(attribute.name) &&
+                      styles.attributeSelected,
+                  ]}
+                  onPress={() => toggleAttribute(attribute.name)}
+                  disabled={
+                    attribute.required &&
+                    selectedAttributes.includes(attribute.name)
+                  }
+                >
+                  <View style={styles.attributeInfo}>
+                    <Text
+                      style={[
+                        styles.attributeName,
+                        selectedAttributes.includes(attribute.name) &&
+                          styles.attributeNameSelected,
+                      ]}
+                    >
+                      {attribute.name}
+                      {attribute.required && (
+                        <Text style={styles.requiredIndicator}> *</Text>
+                      )}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.attributeValue,
+                        selectedAttributes.includes(attribute.name) &&
+                          styles.attributeValueSelected,
+                      ]}
+                    >
+                      {attribute.value}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={
+                      selectedAttributes.includes(attribute.name)
+                        ? "checkbox"
+                        : "square-outline"
+                    }
+                    size={24}
+                    color={
+                      selectedAttributes.includes(attribute.name)
+                        ? theme.colors.primary
+                        : theme.colors.onSurfaceVariant
+                    }
+                  />
+                </TouchableOpacity>
+              ))}
+
+              <TouchableOpacity
+                style={[
+                  styles.shareButton,
+                  selectedAttributes.length === 0 && styles.shareButtonDisabled,
+                ]}
+                onPress={shareCredential}
+                disabled={selectedAttributes.length === 0}
+              >
+                <Text style={styles.shareButtonText}>
+                  Share Selected Attributes
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
+
+      {/* Activity Modal */}
+      <Modal
+        visible={activityModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActivityModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setActivityModalVisible(false)}>
+              <Ionicons name="close" size={24} color={theme.colors.onSurface} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Activity Details</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {selectedActivity && (
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.activityDetails}>
+                <Text style={styles.activityDetailType}>
+                  {selectedActivity.type}
+                </Text>
+                <Text style={styles.activityDetailTarget}>
+                  {selectedActivity.target}
+                </Text>
+                <Text style={styles.activityDetailTime}>
+                  {formatDate(selectedActivity.timestamp)} at{" "}
+                  {new Date(selectedActivity.timestamp).toLocaleTimeString()}
+                </Text>
+              </View>
+
+              <View style={styles.detailsContainer}>
+                <Text style={styles.detailsTitle}>Details:</Text>
+                <View style={styles.detailsContent}>
+                  {Object.entries(selectedActivity.details).map(
                     ([key, value]) => (
-                      <View key={key} style={styles.toggleRow}>
-                        <View style={styles.toggleInfo}>
-                          <Text style={styles.toggleLabel}>
-                            {key
-                              .replace(/([A-Z])/g, " $1")
-                              .replace(/^./, (str) => str.toUpperCase())}
-                          </Text>
-                          <Text style={styles.toggleValue}>{value}</Text>
-                        </View>
-                        <Switch
-                          value={shareToggles[key]}
-                          onValueChange={(val) =>
-                            setShareToggles({ ...shareToggles, [key]: val })
-                          }
-                          trackColor={{
-                            false: theme.colors.surfaceVariant,
-                            true: theme.colors.primary,
-                          }}
-                          thumbColor={
-                            shareToggles[key]
-                              ? theme.colors.onPrimary
-                              : theme.colors.onSurfaceVariant
-                          }
-                        />
+                      <View key={key} style={styles.detailItem}>
+                        <Text style={styles.detailKey}>{key}:</Text>
+                        <Text style={styles.detailValue}>
+                          {Array.isArray(value)
+                            ? value.join(", ")
+                            : String(value)}
+                        </Text>
                       </View>
                     )
                   )}
                 </View>
-
-                <TouchableOpacity
-                  style={styles.shareConfirmButton}
-                  onPress={shareCredential}
-                >
-                  <LinearGradient
-                    colors={[theme.colors.primary, theme.colors.primaryDark]}
-                    style={styles.actionButtonGradient}
-                  >
-                    <Ionicons
-                      name="share"
-                      size={20}
-                      color={theme.colors.onPrimary}
-                    />
-                    <Text style={styles.actionButtonText}>
-                      Share Selected Information
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </ScrollView>
-            )}
-          </LinearGradient>
-        </SafeAreaView>
-      </Modal>
-
-      {/* Add Credential Modal */}
-      <Modal
-        visible={addCredentialModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setAddCredentialModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalContainer}
-          >
-            <LinearGradient
-              colors={[theme.colors.background, theme.colors.surface]}
-              style={styles.modalGradient}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add New Credential</Text>
-                <TouchableOpacity
-                  onPress={() => setAddCredentialModal(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons
-                    name="close"
-                    size={24}
-                    color={theme.colors.onSurface}
-                  />
-                </TouchableOpacity>
               </View>
-
-              <ScrollView style={styles.modalContent}>
-                <View style={styles.formContainer}>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Credential Type *</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      value={newCredential.type}
-                      onChangeText={(text) =>
-                        setNewCredential({ ...newCredential, type: text })
-                      }
-                      placeholder="e.g., Driver's License, Passport"
-                      placeholderTextColor={theme.colors.onSurfaceVariant}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>
-                      Issuing Organization *
-                    </Text>
-                    <TextInput
-                      style={styles.textInput}
-                      value={newCredential.issuer}
-                      onChangeText={(text) =>
-                        setNewCredential({ ...newCredential, issuer: text })
-                      }
-                      placeholder="e.g., Government of Pakistan"
-                      placeholderTextColor={theme.colors.onSurfaceVariant}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Additional Details</Text>
-                    <TextInput
-                      style={[styles.textInput, styles.textArea]}
-                      value={newCredential.details}
-                      onChangeText={(text) =>
-                        setNewCredential({ ...newCredential, details: text })
-                      }
-                      placeholder="Enter any additional information..."
-                      placeholderTextColor={theme.colors.onSurfaceVariant}
-                      multiline
-                      numberOfLines={4}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.submitButton}
-                    onPress={handleAddCredential}
-                  >
-                    <LinearGradient
-                      colors={[theme.colors.primary, theme.colors.primaryDark]}
-                      style={styles.actionButtonGradient}
-                    >
-                      <Ionicons
-                        name="add-circle"
-                        size={20}
-                        color={theme.colors.onPrimary}
-                      />
-                      <Text style={styles.actionButtonText}>
-                        Add Credential
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </LinearGradient>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
+            </ScrollView>
+          )}
+        </View>
       </Modal>
-
-      {/* Verification Request Modal */}
-      <Modal
-        visible={verificationModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setVerificationModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalContainer}
-          >
-            <LinearGradient
-              colors={[theme.colors.background, theme.colors.surface]}
-              style={styles.modalGradient}
-            >
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Request Verification</Text>
-                <TouchableOpacity
-                  onPress={() => setVerificationModal(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons
-                    name="close"
-                    size={24}
-                    color={theme.colors.onSurface}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalContent}>
-                <Text style={styles.verificationDescription}>
-                  Select an institution type to request identity verification
-                </Text>
-
-                <View style={styles.institutionGrid}>
-                  {institutionTypes.map((institution) => (
-                    <TouchableOpacity
-                      key={institution.id}
-                      style={[
-                        styles.institutionCard,
-                        selectedInstitution?.id === institution.id &&
-                          styles.institutionCardSelected,
-                      ]}
-                      onPress={() => {
-                        setSelectedInstitution(institution);
-                        setVerificationRequest({
-                          ...verificationRequest,
-                          institutionType: institution.name,
-                        });
-                      }}
-                    >
-                      <Text style={styles.institutionIcon}>
-                        {institution.icon}
-                      </Text>
-                      <Text style={styles.institutionName}>
-                        {institution.name}
-                      </Text>
-                      <Text style={styles.institutionDescription}>
-                        {institution.description}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {selectedInstitution && (
-                  <View style={styles.verificationForm}>
-                    <View style={styles.requiredDocsSection}>
-                      <Text style={styles.requiredDocsTitle}>
-                        Required Documents:
-                      </Text>
-                      {selectedInstitution.requiredDocs.map((doc, index) => (
-                        <Text key={index} style={styles.requiredDoc}>
-                          • {doc}
-                        </Text>
-                      ))}
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>
-                        Verification Message *
-                      </Text>
-                      <TextInput
-                        style={[styles.textInput, styles.textArea]}
-                        value={verificationRequest.message}
-                        onChangeText={(text) =>
-                          setVerificationRequest({
-                            ...verificationRequest,
-                            message: text,
-                          })
-                        }
-                        placeholder="Please describe what you need verified and why..."
-                        placeholderTextColor={theme.colors.onSurfaceVariant}
-                        multiline
-                        numberOfLines={4}
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.submitButton}
-                      onPress={handleVerificationRequest}
-                    >
-                      <LinearGradient
-                        colors={[
-                          theme.colors.success,
-                          theme.colors.success + "DD",
-                        ]}
-                        style={styles.actionButtonGradient}
-                      >
-                        <Ionicons
-                          name="shield-checkmark"
-                          size={20}
-                          color={theme.colors.onPrimary}
-                        />
-                        <Text style={styles.actionButtonText}>
-                          Submit Request
-                        </Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </ScrollView>
-            </LinearGradient>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
-    </LinearGradient>
+    </SafeAreaView>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingTop: Platform.OS === "ios" ? 50 : 30,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  headerGradient: {
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: theme.colors.onPrimary,
-  },
-  profileButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.onPrimary + "20",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  credentialsSection: {
-    gap: 16,
-    marginBottom: 32,
-  },
-  credentialCard: {
-    borderRadius: 16,
-    borderWidth: 2,
-    overflow: "hidden",
-  },
-  cardGradient: {
-    borderRadius: 14,
-  },
-  cardContent: {
-    padding: 20,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  cardTitleRow: {
-    flexDirection: "row",
-    flex: 1,
-    gap: 12,
-  },
-  credentialIcon: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconEmoji: {
-    fontSize: 20,
-  },
-  titleContainer: {
-    flex: 1,
-  },
-  credentialType: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: theme.colors.onSurface,
-    marginBottom: 4,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  credentialStatus: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  moreButton: {
-    padding: 4,
-  },
-  cardBody: {
-    marginBottom: 16,
-  },
-  issuerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  issuerLabel: {
-    fontSize: 12,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  programLabel: {
-    fontSize: 12,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  issuerValueRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  issuerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  issuerName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-  },
-  issuerEmoji: {
-    fontSize: 16,
-  },
-  programValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-  },
-  cardFooter: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  footerText: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-  },
-  activitySection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: theme.colors.onSurface,
-    marginBottom: 16,
-  },
-  activityItem: {
-    borderRadius: 12,
-    marginBottom: 8,
-    overflow: "hidden",
-  },
-  activityGradient: {
-    borderRadius: 12,
-  },
-  activityContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 12,
-  },
-  activityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activityText: {
-    flex: 1,
-  },
-  activityAction: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: theme.colors.onSurface,
-    marginBottom: 2,
-  },
-  activityTime: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-  },
-
-  // Floating Action Button Styles
-  fabContainer: {
-    position: "absolute",
-    bottom: 30,
-    right: 20,
-    alignItems: "center",
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-  },
-  mainFab: {
-    backgroundColor: theme.colors.primary,
-  },
-  secondaryFab: {
-    position: "absolute",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  secondaryFabButton: {
-    backgroundColor: theme.colors.secondary,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  fabLabel: {
-    backgroundColor: theme.colors.surface,
-    color: theme.colors.onSurface,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    fontSize: 12,
-    fontWeight: "500",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-
-  // Modal Styles
-  modalContainer: {
-    flex: 1,
-  },
-  modalGradient: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: theme.colors.onSurface,
-  },
-  closeButton: {
-    padding: 8,
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-
-  // Credential Detail Styles
-  credentialDetail: {
-    gap: 24,
-  },
-  detailHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginBottom: 8,
-  },
-  detailIcon: {
-    fontSize: 32,
-  },
-  detailTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: theme.colors.onSurface,
-  },
-  detailIssuer: {
-    fontSize: 16,
-    color: theme.colors.onSurfaceVariant,
-    marginTop: 4,
-  },
-  detailsGrid: {
-    gap: 16,
-  },
-  detailRow: {
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: theme.colors.onSurfaceVariant,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 16,
-    color: theme.colors.onSurface,
-    fontWeight: "500",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-  },
-  shareButton: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  verifyButton: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  actionButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
-    gap: 8,
-  },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onPrimary,
-  },
-
-  // Share Modal Styles
-  shareDescription: {
-    fontSize: 16,
-    color: theme.colors.onSurfaceVariant,
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  shareToggles: {
-    gap: 16,
-    marginBottom: 32,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  toggleInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-    marginBottom: 4,
-  },
-  toggleValue: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-  },
-  shareConfirmButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-
-  // Form Styles
-  formContainer: {
-    gap: 24,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-  },
-  textInput: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: theme.colors.onSurface,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  submitButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginTop: 16,
-  },
-
-  // Verification Modal Styles
-  verificationDescription: {
-    fontSize: 16,
-    color: theme.colors.onSurfaceVariant,
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  institutionGrid: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  institutionCard: {
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    alignItems: "center",
-  },
-  institutionCardSelected: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primary + "10",
-  },
-  institutionIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  institutionName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-    marginBottom: 4,
-  },
-  institutionDescription: {
-    fontSize: 12,
-    color: theme.colors.onSurfaceVariant,
-    textAlign: "center",
-  },
-  verificationForm: {
-    gap: 20,
-  },
-  requiredDocsSection: {
-    backgroundColor: theme.colors.surface,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  requiredDocsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurface,
-    marginBottom: 12,
-  },
-  requiredDoc: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    marginBottom: 4,
-  },
-});
+export default HomeScreen;

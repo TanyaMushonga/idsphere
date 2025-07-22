@@ -1,0 +1,208 @@
+{
+  "did": "did:zim:8c7f4f9a2b34",
+  "credentials": [
+    {
+      "id": "cred_001",
+      "type": "Bank Account Verification",
+      "issuer": "CBZ Bank Zimbabwe",
+      "issueDate": "2025-06-15",
+      "expiryDate": "2028-06-15",
+      "status": "Valid",
+      "attributes": [
+        { "name": "Full Name", "value": "Tanya Moyo", "required": true },
+        {
+          "name": "National ID Number",
+          "value": "63-9876543-Z-12",
+          "required": true
+        },
+        {
+          "name": "Bank Account Number",
+          "value": "2045678901",
+          "required": false
+        },
+        { "name": "Branch", "value": "Bulawayo Main", "required": false }
+      ]
+    },
+    {
+      "id": "cred_002",
+      "type": "COVID-19 Vaccination Certificate",
+      "issuer": "Ministry of Health Zimbabwe",
+      "issueDate": "2024-11-20",
+      "expiryDate": "2029-11-20",
+      "status": "Valid",
+      "attributes": [
+        { "name": "Full Name", "value": "Tanya Moyo", "required": true },
+        { "name": "Vaccine Type", "value": "Sinovac", "required": true },
+        { "name": "Dose 1 Date", "value": "2024-11-20", "required": false },
+        { "name": "Dose 2 Date", "value": "2024-12-20", "required": false },
+        {
+          "name": "Certificate ID",
+          "value": "MOH-COVID-778899",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "cred_003",
+      "type": "Residential Permit",
+      "issuer": "Bulawayo City Council",
+      "issueDate": "2025-03-01",
+      "expiryDate": "2026-03-01",
+      "status": "Valid",
+      "attributes": [
+        { "name": "Resident Name", "value": "Tanya Moyo", "required": true },
+        {
+          "name": "Physical Address",
+          "value": "56 Josiah Tongogara St, Bulawayo",
+          "required": true
+        },
+        { "name": "Permit Number", "value": "BYO-RES-4567", "required": false }
+      ]
+    },
+    {
+      "id": "cred_004",
+      "type": "Driver's License",
+      "issuer": "Zimbabwe Traffic Safety Council",
+      "issueDate": "2023-08-10",
+      "expiryDate": "2028-08-10",
+      "status": "Valid",
+      "attributes": [
+        { "name": "Full Name", "value": "Tanya Moyo", "required": true },
+        {
+          "name": "License Number",
+          "value": "DL-ZIM-345678",
+          "required": true
+        },
+        { "name": "Vehicle Class", "value": "Class 4", "required": false },
+        { "name": "Issue Location", "value": "Bulawayo", "required": false }
+      ]
+    },
+    {
+      "id": "cred_005",
+      "type": "University Degree Certificate",
+      "issuer": "National University of Science and Technology (NUST)",
+      "issueDate": "2024-07-01",
+      "expiryDate": "N/A",
+      "status": "Valid",
+      "attributes": [
+        { "name": "Graduate Name", "value": "Tanya Moyo", "required": true },
+        { "name": "Degree", "value": "BSc Computer Science", "required": true },
+        { "name": "Graduation Year", "value": "2024", "required": false },
+        {
+          "name": "Certificate ID",
+          "value": "NUST-2024-00123",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "recentActivity": [
+    {
+      "id": "act_001",
+      "type": "Credential Shared",
+      "target": "CBZ Bank Zimbabwe",
+      "timestamp": "2025-07-20T10:30:00Z",
+      "details": {
+        "sharedCredential": "Bank Account Verification",
+        "sharedAttributes": ["Full Name", "National ID Number"],
+        "method": "QR Code Scan"
+      }
+    },
+    {
+      "id": "act_002",
+      "type": "Verification Request",
+      "target": "Ministry of Health Verification Portal",
+      "timestamp": "2025-07-19T15:00:00Z",
+      "details": {
+        "requestedCredential": "COVID-19 Vaccination Certificate",
+        "attributesVerified": ["Full Name", "Vaccine Type"],
+        "verificationMethod": "Online Verification"
+      }
+    },
+    {
+      "id": "act_003",
+      "type": "New Credential Received",
+      "target": "Bulawayo City Council",
+      "timestamp": "2025-07-18T09:45:00Z",
+      "details": {
+        "credentialType": "Residential Permit",
+        "attributes": ["Resident Name", "Physical Address", "Permit Number"],
+        "issuerContact": "info@byocity.gov.zw"
+      }
+    },
+    {
+      "id": "act_004",
+      "type": "Backup Reminder",
+      "target": "IDSphere App",
+      "timestamp": "2025-07-17T08:00:00Z",
+      "details": {
+        "message": "You have not backed up your DID in the last 30 days."
+      }
+    },
+    {
+      "id": "act_005",
+      "type": "Credential Shared",
+      "target": "TechExpo Organizer",
+      "timestamp": "2025-07-16T16:20:00Z",
+      "details": {
+        "sharedCredential": "University Degree Certificate",
+        "sharedAttributes": ["Graduate Name", "Degree"],
+        "method": "Bluetooth Share"
+      }
+    },
+    {
+      "id": "act_006",
+      "type": "Credential Revoked",
+      "target": "Old Driver's License",
+      "timestamp": "2025-07-15T14:10:00Z",
+      "details": {
+        "credentialType": "Driver's License",
+        "reason": "Replaced with new license issued on 2023-08-10"
+      }
+    },
+    {
+      "id": "act_007",
+      "type": "Verification Request",
+      "target": "Bulawayo Traffic Police",
+      "timestamp": "2025-07-14T11:50:00Z",
+      "details": {
+        "requestedCredential": "Driver's License",
+        "attributesVerified": ["Full Name", "License Number"],
+        "verificationMethod": "Roadside QR Check"
+      }
+    },
+    {
+      "id": "act_008",
+      "type": "New Credential Received",
+      "target": "Ministry of Health Zimbabwe",
+      "timestamp": "2025-07-13T10:00:00Z",
+      "details": {
+        "credentialType": "COVID-19 Vaccination Certificate",
+        "attributes": ["Full Name", "Vaccine Type", "Certificate ID"],
+        "issuerContact": "vaccines@moh.gov.zw"
+      }
+    },
+    {
+      "id": "act_009",
+      "type": "Credential Shared",
+      "target": "ZimRide Car Hire",
+      "timestamp": "2025-07-12T09:30:00Z",
+      "details": {
+        "sharedCredential": "Driver's License",
+        "sharedAttributes": ["Full Name", "License Number", "Vehicle Class"],
+        "method": "Manual Share via NFC"
+      }
+    },
+    {
+      "id": "act_010",
+      "type": "New Credential Received",
+      "target": "National University of Science and Technology (NUST)",
+      "timestamp": "2025-07-11T08:00:00Z",
+      "details": {
+        "credentialType": "University Degree Certificate",
+        "attributes": ["Graduate Name", "Degree", "Graduation Year"],
+        "issuerContact": "registrar@nust.ac.zw"
+      }
+    }
+  ]
+}
